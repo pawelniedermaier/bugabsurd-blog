@@ -3,8 +3,11 @@ import Link from 'next/link';
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
+// NOWE IMPORTY DO CZYSZCZENIA TEKSTU
+import { remark } from 'remark';
+import strip from 'strip-markdown';
 
-// Ta funkcja uruchamia się podczas budowania strony i czyta wszystkie posty z folderu /posts
+// Ta funkcja teraz profesjonalnie czyści tekst przed stworzeniem zajawki
 export async function getStaticProps() {
   const postsDirectory = path.join(process.cwd(), 'posts');
   let posts = [];
@@ -20,16 +23,25 @@ export async function getStaticProps() {
       
       const { data, content } = matter(fileContents);
 
-      // === NOWA LINIA: Czyścimy treść z tagów HTML ===
-      const plainTextContent = content.replace(/<[^>]*>/g, '');
-      
-      // Tworzymy zajawkę z OCZYSZCZONEGO tekstu
-      const excerpt = plainTextContent.substring(0, 150) + '...';
+      // === NOWA, INTELIGENTNA LOGIKA TWORZENIA ZAJAWKI ===
+      let excerpt = '';
+      const boldRegex = /\*\*(.*?)\*\*/s; // Wyrażenie regularne do znalezienia tekstu między **...**
+      const boldMatch = content.match(boldRegex);
+
+      if (boldMatch && boldMatch[1]) {
+        // Jeśli znaleziono pogrubiony tekst, użyj go jako zajawki.
+        excerpt = boldMatch[1];
+      } else {
+        // Jeśli NIE, użyj starej metody (pierwsze 150 znaków) jako zabezpieczenie.
+        const processedContent = remark().use(strip).processSync(content);
+        const plainTextContent = String(processedContent);
+        excerpt = plainTextContent.trim().replace(/\s+/g, ' ').substring(0, 150) + '...';
+      }
 
       return {
         slug,
         frontmatter: data,
-        excerpt,
+        excerpt, // Przekaż nowo stworzoną zajawkę
       };
     }).filter(post => post !== null);
 
@@ -44,7 +56,8 @@ export async function getStaticProps() {
   };
 }
 
-// Komponent strony głównej z dodanym statusem na liście postów
+
+// Reszta komponentu bez zmian
 export default function HomePage({ posts = [] }) {
   return (
     <div className="min-h-screen p-4 sm:p-8 relative">
@@ -53,7 +66,7 @@ export default function HomePage({ posts = [] }) {
       </Head>
       <div className="scanlines"></div>
 
-      {/* === ZAKTUALIZOWANA SEKCJA HERO === */}
+      {/* Sekcja Hero */}
       <section className="h-screen/2 flex flex-col justify-center items-center text-center">
         <div className="font-mono text-lg md:text-2xl space-y-4 text-gray-300">
             <p className="manifesto-line" style={{ animationDelay: '0.5s' }}>Rzeczywistość jest błędem w oprogramowaniu.</p>
@@ -72,7 +85,6 @@ export default function HomePage({ posts = [] }) {
             </p>
         </div>
       </section>
-      {/* === KONIEC SEKCJI HERO === */}
 
       <main className="max-w-4xl mx-auto pb-16">
         <header className="mb-12">
@@ -85,27 +97,23 @@ export default function HomePage({ posts = [] }) {
         <div className="space-y-10">
           {posts.map((post) => (
             <div key={post.slug} className="font-mono text-sm sm:text-base">
-              
-              {/* === ZAKTUALIZOWANA SEKCJA METADANYCH === */}
               <div className="flex flex-wrap gap-x-4 text-gray-500">
                 <span>[DATE: {post.frontmatter.date}]</span>
-                <span>[CATEGORY: {post.frontmatter.category}]</span>
-                {/* Dodajemy status tylko jeśli istnieje w pliku .mdx */}
+                <Link href={`/kategoria/${post.frontmatter.category.toLowerCase().replace(/ /g, '-')}`} className="hover:text-green-400 transition-colors font-bold">
+                  [CATEGORY: {post.frontmatter.category}]
+                </Link>
                 {post.frontmatter.status && (
                    <span>[STATUS: <span className={post.frontmatter.status === 'KRYTYCZNY' || post.frontmatter.status === 'USZKODZONY' ? 'text-red-500 font-bold' : 'text-green-500'}>{post.frontmatter.status}</span>]</span>
                 )}
               </div>
-
               <h2 className="text-lg sm:text-xl mt-1">
                 <Link href={`/posts/${post.slug}`} className="text-gray-200 hover:text-green-400 transition-colors duration-300 glitch-text" data-text={post.frontmatter.title}>
                     {'>'} {post.frontmatter.title}
                 </Link>
               </h2>
-              
               <p className="text-gray-400 mt-2 text-base leading-relaxed font-sans">
                 {post.excerpt}
               </p>
-
               <div className="flex flex-wrap gap-x-4 text-gray-500 mt-3">
                  <Link href={`/posts/${post.slug}`} className="text-green-400 hover:underline">
                     [ODCZYTAJ CAŁY LOG...]

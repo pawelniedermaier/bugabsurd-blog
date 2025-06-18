@@ -7,7 +7,11 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 
-// Definiujemy niestandardowe komponenty, np. do optymalizacji obrazków
+// KROK 1: Importujemy nasz niestandardowy komponent
+import HolographicQuote from '../../components/HolographicQuote';
+
+// KROK 2: Definiujemy, że tag 'img' ma używać optymalizacji Next.js, 
+// a tag 'HolographicQuote' ma używać naszego nowego komponentu.
 const components = {
   img: (props) => (
     <div className="my-8">
@@ -15,15 +19,19 @@ const components = {
       <p className="text-xs text-center text-gray-500 mt-2">{props.alt}</p>
     </div>
   ),
+  HolographicQuote, // Rejestracja komponentu
 };
 
-// Ta funkcja mówi Next.js, które strony postów ma wygenerować
+// Funkcja, która mówi Next.js, jakie strony postów istnieją
 export async function getStaticPaths() {
   const postsDirectory = path.join(process.cwd(), 'posts');
   let filenames = [];
-  if (fs.existsSync(postsDirectory)) {
+  try {
     filenames = fs.readdirSync(postsDirectory);
+  } catch (error) {
+    console.log("Could not find /posts directory. It's okay if it's the first run.");
   }
+  
   const paths = filenames
     .filter(filename => filename.endsWith('.mdx'))
     .map(filename => ({
@@ -31,37 +39,40 @@ export async function getStaticPaths() {
         slug: filename.replace(/\.mdx$/, ''),
       },
     }));
-  return { paths, fallback: false };
+
+  return { paths, fallback: 'blocking' };
 }
 
-// Ta funkcja pobiera dane dla konkretnego posta
+// Funkcja, która pobiera dane dla konkretnego posta
 export async function getStaticProps({ params }) {
   const { slug } = params;
   const postsDirectory = path.join(process.cwd(), 'posts');
   
-  // Logika do znalezienia poprzedniego i następnego posta
-  const filenames = fs.readdirSync(postsDirectory);
-  const allPosts = filenames.map(filename => {
-    const slug = filename.replace(/\.mdx$/, '');
-    const filePath = path.join(postsDirectory, filename);
-    const fileContents = fs.readFileSync(filePath, 'utf8');
-    const { data } = matter(fileContents);
-    return { slug, frontmatter: data };
-  });
-
-  allPosts.sort((a, b) => new Date(b.frontmatter.date) - new Date(a.frontmatter.date));
-
-  const postIndex = allPosts.findIndex(post => post.slug === slug);
-  const prevPost = allPosts[postIndex + 1] || null;
-  const nextPost = allPosts[postIndex - 1] || null;
-
-  // Wczytanie właściwej treści posta
-  const filePath = path.join(postsDirectory, `${slug}.mdx`);
-  
   try {
+    const filenames = fs.readdirSync(postsDirectory);
+    const allPosts = filenames
+      .filter(filename => filename.endsWith('.mdx'))
+      .map(filename => {
+        const filePath = path.join(postsDirectory, filename);
+        const fileContents = fs.readFileSync(filePath, 'utf8');
+        const { data } = matter(fileContents);
+        return {
+          slug: filename.replace(/\.mdx$/, ''),
+          frontmatter: data,
+        };
+      });
+
+    allPosts.sort((a, b) => new Date(b.frontmatter.date) - new Date(a.frontmatter.date));
+
+    const postIndex = allPosts.findIndex(post => post.slug === slug);
+    const prevPost = allPosts[postIndex + 1] || null;
+    const nextPost = allPosts[postIndex - 1] || null;
+
+    const filePath = path.join(postsDirectory, `${slug}.mdx`);
     const source = fs.readFileSync(filePath, 'utf8');
     const { content, data } = matter(source);
     const mdxSource = await serialize(content, { parseFrontmatter: false });
+
     return { 
       props: { 
         source: mdxSource, 
@@ -76,8 +87,12 @@ export async function getStaticProps({ params }) {
   }
 }
 
-// Komponent strony posta z finalną nawigacją
+// Komponent strony posta
 export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
+  if (!frontmatter) {
+    return <div>Ładowanie...</div>;
+  }
+  
   const statusClassName = frontmatter.status === 'KRYTYCZNY' || frontmatter.status === 'USZKODZONY' 
     ? 'text-red-500 font-bold' 
     : 'text-green-500';
@@ -87,7 +102,7 @@ export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
        <Head>
         <title>{`${frontmatter.title} :: bugabsurd.pl`}</title>
       </Head>
-      <div className="scanlines"></div>
+      {/*<div className="scanlines"></div>*/}
       <main className="max-w-3xl mx-auto">
         <header className="mb-12">
            <Link href="/" className="text-green-400 font-mono hover:underline glitch-text" data-text="< Wróć do strumienia danych">
@@ -100,7 +115,9 @@ export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
           </h1>
           <div className="border-t border-b border-gray-700 py-2 my-8 text-xs font-mono text-gray-500 flex flex-wrap gap-x-4">
             <span>[DATE: {frontmatter.date}]</span>
-            <span>[CATEGORY: {frontmatter.category}]</span>
+            <Link href={`/kategoria/${frontmatter.category.toLowerCase().replace(/ /g, '-')}`} className="hover:text-green-400 transition-colors">
+              [CATEGORY: {frontmatter.category}]
+            </Link>
             {frontmatter.status && (
               <span>[STATUS: <span className={statusClassName}>{frontmatter.status}</span>]</span>
             )}
@@ -110,23 +127,42 @@ export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
           </div>
         </article>
 
+        {/* === ZAKTUALIZOWANA SEKCJA NAWIGACJI === */}
         <nav className="mt-16 pt-8 border-t border-gray-700/50 flex justify-between items-center font-mono">
+          
+          {/* Link do poprzedniego posta */}
           {prevPost ? (
-            <Link href={`/posts/${prevPost.slug}`} className="text-gray-400 hover:text-green-400 transition-colors flex items-center">
+            <Link 
+              href={`/posts/${prevPost.slug}`} 
+              className="text-gray-400 flex items-center glitch-text" 
+              data-text="← Poprzedni log"
+            >
                 <i data-lucide="arrow-left" className="w-4 h-4 mr-2"></i> Poprzedni log
             </Link>
           ) : (
-            <div></div> 
+            <div></div> // Pusty element dla zachowania układu
           )}
-          <Link href="/" className="text-gray-400 hover:text-green-400 transition-colors flex items-center">
+
+          {/* Link do strony głównej */}
+          <Link 
+            href="/" 
+            className="text-gray-400 flex items-center glitch-text" 
+            data-text="Wróć do strumienia"
+          >
             <i data-lucide="layout-grid" className="w-4 h-4 mr-2"></i> Wróć do strumienia
           </Link>
+
+          {/* Link do następnego posta */}
           {nextPost ? (
-            <Link href={`/posts/${nextPost.slug}`} className="text-gray-400 hover:text-green-400 transition-colors text-right flex items-center">
+            <Link 
+              href={`/posts/${nextPost.slug}`} 
+              className="text-gray-400 text-right flex items-center glitch-text" 
+              data-text="Następny log →"
+            >
                 Następny log <i data-lucide="arrow-right" className="w-4 h-4 ml-2"></i>
             </Link>
           ) : (
-            <div></div>
+            <div></div> // Pusty element dla zachowania układu
           )}
         </nav>
 

@@ -45,7 +45,13 @@ export async function getStaticProps() {
       };
     }).filter(post => post !== null);
 
-    posts.sort((a, b) => new Date(b.frontmatter.date) - new Date(a.frontmatter.date));
+    posts.sort((a, b) => {
+      // Special handling for year 3069 - always put it first
+      if (a.frontmatter.date.startsWith('3069')) return -1;
+      if (b.frontmatter.date.startsWith('3069')) return 1;
+      // Normal date comparison for other dates
+      return new Date(b.frontmatter.date) - new Date(a.frontmatter.date);
+    });
   }
 
   return {
@@ -143,11 +149,11 @@ export default function HomePage({ posts = [] }) {
                     />
                 </div>
                 <div className="md:col-span-3 text-gray-300">
-                    <h3 className="text-xl font-bold text-white font-mono mb-4">Cześć, jestem Paweł - operator tego absurdu.</h3>
+                    <h3 className="text-xl font-bold text-white font-mono mb-4">Paweł: operator tego absurdu.</h3>
                     <div className="space-y-3 text-lg leading-relaxed">
-                        <p>Trochę filozof, trochę dziki artysta.</p>
-                        <p>Ten blog to mój plac zabaw na styku <span className="text-green-400 font-semibold">cyberpunka i surrealizmu</span>.</p>
-                        <p>Lubię prowokować, bo już się nie boję. Nie ma tu cenzury. Latamy jak chcemy i gdzie chcemy.</p>
+                        <p>Trochę filozof, trochę dzik-artysta i inżynier.</p>
+                        <p>Blog to mój plac zabaw na styku <span className="text-green-400 font-semibold">cyberpunka i surrealizmu</span>.</p>
+                        <p>Lubię prowokować do myślenia. Nie ma tu cenzury. Latamy jak chcemy i gdzie chcemy.</p>
                     </div>
                 </div>
             </div>

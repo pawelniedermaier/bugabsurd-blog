@@ -71,7 +71,13 @@ export async function getStaticProps({ params }) {
           frontmatter: data,
         };
       });
-    allPosts.sort((a, b) => new Date(b.frontmatter.date) - new Date(a.frontmatter.date));
+    allPosts.sort((a, b) => {
+      // Special handling for year 3069 - always put it first
+      if (a.frontmatter.date.startsWith('3069')) return -1;
+      if (b.frontmatter.date.startsWith('3069')) return 1;
+      // Normal date comparison for other dates
+      return new Date(b.frontmatter.date) - new Date(a.frontmatter.date);
+    });
     const postIndex = allPosts.findIndex(post => post.slug === decodedSlug);
     const prevPost = allPosts[postIndex + 1] || null;
     const nextPost = allPosts[postIndex - 1] || null;

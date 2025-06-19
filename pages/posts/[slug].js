@@ -6,12 +6,25 @@ import { MDXRemote } from 'next-mdx-remote';
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-
-// KROK 1: Importujemy nasz niestandardowy komponent
 import HolographicQuote from '../../components/HolographicQuote';
 
-// KROK 2: Definiujemy, że tag 'img' ma używać optymalizacji Next.js, 
-// a tag 'HolographicQuote' ma używać naszego nowego komponentu.
+// Funkcja pomocnicza do stylizacji statusów
+const getStatusStyles = (status) => {
+  if (!status) return '';
+  switch (status.toUpperCase()) {
+    case 'KRYTYCZNY':
+    case 'USZKODZONY':
+      return 'text-red-500 font-bold';
+    case 'ZAGROŻENIE':
+      return 'text-orange-400 font-bold';
+    case 'MISTYCZNY':
+      return 'text-violet-400 font-bold';
+    case 'STABILNY':
+    default:
+      return 'text-green-500';
+  }
+};
+
 const components = {
   img: (props) => (
     <div className="my-8">
@@ -19,35 +32,32 @@ const components = {
       <p className="text-xs text-center text-gray-500 mt-2">{props.alt}</p>
     </div>
   ),
-  HolographicQuote, // Rejestracja komponentu
+  Strong: (props) => <strong className="font-bold text-white" {...props} />,
+  HolographicQuote,
 };
 
-// Funkcja, która mówi Next.js, jakie strony postów istnieją
 export async function getStaticPaths() {
   const postsDirectory = path.join(process.cwd(), 'posts');
   let filenames = [];
   try {
     filenames = fs.readdirSync(postsDirectory);
   } catch (error) {
-    console.log("Could not find /posts directory. It's okay if it's the first run.");
+    console.log("Could not find /posts directory, it's okay.");
   }
-  
   const paths = filenames
     .filter(filename => filename.endsWith('.mdx'))
     .map(filename => ({
       params: {
-        slug: filename.replace(/\.mdx$/, ''),
+        slug: encodeURIComponent(filename.replace(/\.mdx$/, '')),
       },
     }));
-
   return { paths, fallback: 'blocking' };
 }
 
-// Funkcja, która pobiera dane dla konkretnego posta
 export async function getStaticProps({ params }) {
   const { slug } = params;
+  const decodedSlug = decodeURIComponent(slug);
   const postsDirectory = path.join(process.cwd(), 'posts');
-  
   try {
     const filenames = fs.readdirSync(postsDirectory);
     const allPosts = filenames
@@ -61,18 +71,14 @@ export async function getStaticProps({ params }) {
           frontmatter: data,
         };
       });
-
     allPosts.sort((a, b) => new Date(b.frontmatter.date) - new Date(a.frontmatter.date));
-
-    const postIndex = allPosts.findIndex(post => post.slug === slug);
+    const postIndex = allPosts.findIndex(post => post.slug === decodedSlug);
     const prevPost = allPosts[postIndex + 1] || null;
     const nextPost = allPosts[postIndex - 1] || null;
-
-    const filePath = path.join(postsDirectory, `${slug}.mdx`);
+    const filePath = path.join(postsDirectory, `${decodedSlug}.mdx`);
     const source = fs.readFileSync(filePath, 'utf8');
     const { content, data } = matter(source);
     const mdxSource = await serialize(content, { parseFrontmatter: false });
-
     return { 
       props: { 
         source: mdxSource, 
@@ -83,39 +89,36 @@ export async function getStaticProps({ params }) {
       revalidate: 60,
     };
   } catch (error) {
+    console.error('Error loading post:', error);
     return { notFound: true };
   }
 }
 
-// Komponent strony posta
 export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
   if (!frontmatter) {
     return <div>Ładowanie...</div>;
   }
   
-  const statusClassName = frontmatter.status === 'KRYTYCZNY' || frontmatter.status === 'USZKODZONY' 
-    ? 'text-red-500 font-bold' 
-    : 'text-green-500';
+  const statusClassName = getStatusStyles(frontmatter.status);
 
   return (
     <div className="min-h-screen p-4 sm:p-8 relative">
        <Head>
         <title>{`${frontmatter.title} :: bugabsurd.pl`}</title>
       </Head>
-      {/*<div className="scanlines"></div>*/}
       <main className="max-w-3xl mx-auto">
         <header className="mb-12">
-           <Link href="/" className="text-green-400 font-mono hover:underline glitch-text" data-text="< Wróć do strumienia danych">
+           <Link href="/" className="text-green-400 font-mono hover:underline glitch-interactive" data-text="< Wróć do strumienia danych">
               {'<'} Wróć do strumienia danych
            </Link>
         </header>
         <article>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-100 mb-4 font-mono !leading-tight">
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-100 mb-4 font-mono !leading-tight glitch-text" data-text={frontmatter.title}>
             {frontmatter.title}
           </h1>
           <div className="border-t border-b border-gray-700 py-2 my-8 text-xs font-mono text-gray-500 flex flex-wrap gap-x-4">
             <span>[DATE: {frontmatter.date}]</span>
-            <Link href={`/kategoria/${frontmatter.category.toLowerCase().replace(/ /g, '-')}`} className="hover:text-green-400 transition-colors">
+            <Link href={`/kategoria/${frontmatter.category.toLowerCase().replace(/ /g, '-')}`} className="hover:text-green-400 transition-colors font-bold">
               [CATEGORY: {frontmatter.category}]
             </Link>
             {frontmatter.status && (
@@ -126,46 +129,21 @@ export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
              <MDXRemote {...source} components={components} />
           </div>
         </article>
-
-        {/* === ZAKTUALIZOWANA SEKCJA NAWIGACJI === */}
         <nav className="mt-16 pt-8 border-t border-gray-700/50 flex justify-between items-center font-mono">
-          
-          {/* Link do poprzedniego posta */}
           {prevPost ? (
-            <Link 
-              href={`/posts/${prevPost.slug}`} 
-              className="text-gray-400 flex items-center glitch-text" 
-              data-text="← Poprzedni log"
-            >
+            <Link href={`/posts/${encodeURIComponent(prevPost.slug)}`} className="text-gray-400 flex items-center glitch-interactive" data-text="← Poprzedni log">
                 <i data-lucide="arrow-left" className="w-4 h-4 mr-2"></i> Poprzedni log
             </Link>
-          ) : (
-            <div></div> // Pusty element dla zachowania układu
-          )}
-
-          {/* Link do strony głównej */}
-          <Link 
-            href="/" 
-            className="text-gray-400 flex items-center glitch-text" 
-            data-text="Wróć do strumienia"
-          >
+          ) : ( <div></div> )}
+          <Link href="/" className="text-gray-400 flex items-center glitch-interactive" data-text="Wróć do strumienia">
             <i data-lucide="layout-grid" className="w-4 h-4 mr-2"></i> Wróć do strumienia
           </Link>
-
-          {/* Link do następnego posta */}
           {nextPost ? (
-            <Link 
-              href={`/posts/${nextPost.slug}`} 
-              className="text-gray-400 text-right flex items-center glitch-text" 
-              data-text="Następny log →"
-            >
+            <Link href={`/posts/${encodeURIComponent(nextPost.slug)}`} className="text-gray-400 text-right flex items-center glitch-interactive" data-text="Następny log →">
                 Następny log <i data-lucide="arrow-right" className="w-4 h-4 ml-2"></i>
             </Link>
-          ) : (
-            <div></div> // Pusty element dla zachowania układu
-          )}
+          ) : ( <div></div> )}
         </nav>
-
         <footer className="mt-16 text-center text-gray-600 font-mono text-xs">
           <p>// KONIEC TRANSMISJI_</p>
         </footer>

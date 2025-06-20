@@ -1,6 +1,7 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useEffect, useRef, useState } from 'react';
 import { serialize } from 'next-mdx-remote/serialize';
 import { MDXRemote } from 'next-mdx-remote';
 import fs from 'fs';
@@ -101,6 +102,133 @@ export async function getStaticProps({ params }) {
 }
 
 export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
+  const [audioReady, setAudioReady] = useState(false);
+  const audioContextRef = useRef(null);
+
+  useEffect(() => {
+    // Initialize audio context on component mount
+    const initAudio = () => {
+      try {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        console.log('Audio context initialized');
+      } catch (error) {
+        console.log('Failed to initialize audio context:', error);
+      }
+    };
+
+    // Set audio as ready after user interaction
+    const handleUserInteraction = async () => {
+      if (audioContextRef.current) {
+        if (audioContextRef.current.state === 'suspended') {
+          await audioContextRef.current.resume();
+        }
+        // Force resume and test audio
+        try {
+          const testOsc = audioContextRef.current.createOscillator();
+          const testGain = audioContextRef.current.createGain();
+          testGain.gain.setValueAtTime(0, audioContextRef.current.currentTime);
+          testOsc.connect(testGain);
+          testGain.connect(audioContextRef.current.destination);
+          testOsc.start(audioContextRef.current.currentTime);
+          testOsc.stop(audioContextRef.current.currentTime + 0.01);
+        } catch (e) {
+          console.log('Test audio failed:', e);
+        }
+      }
+      setAudioReady(true);
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+    };
+    
+    initAudio();
+    document.addEventListener('click', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction);
+    document.addEventListener('touchstart', handleUserInteraction);
+    
+    return () => {
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+      document.removeEventListener('touchstart', handleUserInteraction);
+    };
+  }, []);
+
+  const playGlitchSound = async (type) => {
+    if (!audioContextRef.current) {
+      console.log('No audio context available');
+      return;
+    }
+
+    try {
+      // Force resume audio context
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+
+      const oscillator = audioContextRef.current.createOscillator();
+      const gainNode = audioContextRef.current.createGain();
+      const filter = audioContextRef.current.createBiquadFilter();
+      
+      // Connect nodes
+      oscillator.connect(filter);
+      filter.connect(gainNode);
+      gainNode.connect(audioContextRef.current.destination);
+      
+      // Configure based on type
+      switch (type) {
+        case 'next':
+          // Higher frequency for next post
+          oscillator.type = 'sawtooth';
+          oscillator.frequency.setValueAtTime(400, audioContextRef.current.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(800, audioContextRef.current.currentTime + 0.1);
+          oscillator.frequency.setValueAtTime(1200, audioContextRef.current.currentTime + 0.2);
+          oscillator.frequency.exponentialRampToValueAtTime(600, audioContextRef.current.currentTime + 0.3);
+          break;
+        case 'prev':
+          // Lower frequency for previous post
+          oscillator.type = 'square';
+          oscillator.frequency.setValueAtTime(100, audioContextRef.current.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(50, audioContextRef.current.currentTime + 0.1);
+          oscillator.frequency.setValueAtTime(150, audioContextRef.current.currentTime + 0.2);
+          oscillator.frequency.exponentialRampToValueAtTime(75, audioContextRef.current.currentTime + 0.3);
+          break;
+        case 'home':
+          // Special oscillator for "Wróć do strumienia"
+          oscillator.type = 'triangle';
+          oscillator.frequency.setValueAtTime(300, audioContextRef.current.currentTime);
+          oscillator.frequency.setValueAtTime(150, audioContextRef.current.currentTime + 0.1);
+          oscillator.frequency.setValueAtTime(450, audioContextRef.current.currentTime + 0.2);
+          oscillator.frequency.setValueAtTime(200, audioContextRef.current.currentTime + 0.3);
+          break;
+        default:
+          // Default glitch sound
+          oscillator.type = 'sawtooth';
+          oscillator.frequency.setValueAtTime(200, audioContextRef.current.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(50, audioContextRef.current.currentTime + 0.1);
+          oscillator.frequency.setValueAtTime(800, audioContextRef.current.currentTime + 0.2);
+          oscillator.frequency.exponentialRampToValueAtTime(100, audioContextRef.current.currentTime + 0.3);
+      }
+      
+      // Add filter for glitch effect
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(1000, audioContextRef.current.currentTime);
+      filter.frequency.exponentialRampToValueAtTime(200, audioContextRef.current.currentTime + 0.3);
+      
+      // Volume envelope
+      gainNode.gain.setValueAtTime(0, audioContextRef.current.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.1, audioContextRef.current.currentTime + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContextRef.current.currentTime + 0.3);
+      
+      // Start and stop
+      oscillator.start(audioContextRef.current.currentTime);
+      oscillator.stop(audioContextRef.current.currentTime + 0.3);
+      
+      console.log(`Playing ${type} glitch sound`);
+    } catch (error) {
+      console.log('Audio playback failed:', error);
+    }
+  };
+
   if (!frontmatter) {
     return <div>Ładowanie...</div>;
   }
@@ -114,7 +242,12 @@ export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
       </Head>
       <main className="max-w-3xl mx-auto">
         <header className="mb-12">
-           <Link href="/" className="text-green-400 font-mono hover:underline glitch-interactive" data-text="< Wróć do strumienia danych">
+           <Link 
+             href="/" 
+             className="text-green-400 font-mono hover:underline glitch-interactive" 
+             data-text="< Wróć do strumienia danych"
+             onClick={() => playGlitchSound('home')}
+           >
               {'<'} Wróć do strumienia danych
            </Link>
         </header>
@@ -137,15 +270,30 @@ export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
         </article>
         <nav className="mt-16 pt-8 border-t border-gray-700/50 flex justify-between items-center font-mono">
           {prevPost ? (
-            <Link href={`/posts/${encodeURIComponent(prevPost.slug)}`} className="text-gray-400 flex items-center glitch-interactive" data-text="← Poprzedni log">
+            <Link 
+              href={`/posts/${encodeURIComponent(prevPost.slug)}`} 
+              className="text-gray-400 flex items-center glitch-interactive" 
+              data-text="← Poprzedni log"
+              onClick={() => playGlitchSound('prev')}
+            >
                 <i data-lucide="arrow-left" className="w-4 h-4 mr-2"></i> Poprzedni log
             </Link>
           ) : ( <div></div> )}
-          <Link href="/" className="text-gray-400 flex items-center glitch-interactive" data-text="Wróć do strumienia">
+          <Link 
+            href="/" 
+            className="text-gray-400 flex items-center glitch-interactive" 
+            data-text="Wróć do strumienia"
+            onClick={() => playGlitchSound('home')}
+          >
             <i data-lucide="layout-grid" className="w-4 h-4 mr-2"></i> Wróć do strumienia
           </Link>
           {nextPost ? (
-            <Link href={`/posts/${encodeURIComponent(nextPost.slug)}`} className="text-gray-400 text-right flex items-center glitch-interactive" data-text="Następny log →">
+            <Link 
+              href={`/posts/${encodeURIComponent(nextPost.slug)}`} 
+              className="text-gray-400 text-right flex items-center glitch-interactive" 
+              data-text="Następny log →"
+              onClick={() => playGlitchSound('next')}
+            >
                 Następny log <i data-lucide="arrow-right" className="w-4 h-4 ml-2"></i>
             </Link>
           ) : ( <div></div> )}

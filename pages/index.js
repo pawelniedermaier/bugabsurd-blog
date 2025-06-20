@@ -1,5 +1,6 @@
 import Head from 'next/head';
 import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
@@ -66,8 +67,105 @@ export async function getStaticProps() {
 // Komponent HomePage pozostaje bez zmian, więc nie musisz go kopiować
 // Poniżej jest tylko dla pełnego kontekstu pliku
 export default function HomePage({ posts = [] }) {
-  // ... cała reszta Twojego komponentu HomePage ...
-  // ... nie musisz nic tu zmieniać ...
+  const audioRef = useRef(null);
+  const [audioReady, setAudioReady] = useState(false);
+
+  useEffect(() => {
+    // Create glitch sound using Web Audio API
+    const createGlitchSound = () => {
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        const filter = audioContext.createBiquadFilter();
+        
+        // Connect nodes
+        oscillator.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // Configure glitch sound
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.1);
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
+        oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.3);
+        
+        // Add filter for glitch effect
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(1000, audioContext.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.3);
+        
+        // Volume envelope
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        
+        // Start and stop
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.3);
+        
+        return audioContext;
+      } catch (error) {
+        console.log('Web Audio API not supported, falling back to silent mode');
+        return null;
+      }
+    };
+
+    // Set audio as ready after user interaction
+    const handleUserInteraction = () => {
+      setAudioReady(true);
+      // Test audio on first interaction
+      createGlitchSound();
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+    
+    document.addEventListener('click', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction);
+    
+    return () => {
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+  }, []);
+
+  const handlePostClick = (e) => {
+    // Play glitch sound when clicking on post links
+    if (audioReady) {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      const filter = audioContext.createBiquadFilter();
+      
+      // Connect nodes
+      oscillator.connect(filter);
+      filter.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Configure glitch sound
+      oscillator.type = 'sawtooth';
+      oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.1);
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
+      oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.3);
+      
+      // Add filter for glitch effect
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(1000, audioContext.currentTime);
+      filter.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.3);
+      
+      // Volume envelope
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+      
+      // Start and stop
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+    }
+  };
+
   return (
     <div className="min-h-screen p-4 sm:p-8 relative">
       <Head>
@@ -93,6 +191,11 @@ export default function HomePage({ posts = [] }) {
             <p className="manifesto-line" style={{ animationDelay: '7.5s' }}>
                  <span className="typewriter-text" style={{ width: '0', animationDelay: '7.7s' }}>{'>'} ...transmisja w toku_</span>
             </p>
+            {audioReady && (
+              <p className="manifesto-line" style={{ animationDelay: '9.0s' }}>
+                <span className="typewriter-text text-green-400" style={{ width: '0', animationDelay: '9.2s' }}>{'>'} AUDIO: AKTYWNE_</span>
+              </p>
+            )}
         </div>
       </section>
 
@@ -119,7 +222,7 @@ export default function HomePage({ posts = [] }) {
                   )}
                 </div>
                 <h2 className="text-lg sm:text-xl mt-1">
-                <Link href={`/posts/${encodeURIComponent(post.slug)}`} className="text-gray-200 hover:text-green-400 transition-colors duration-300 glitch-interactive" data-text={post.frontmatter.title}>
+                <Link href={`/posts/${encodeURIComponent(post.slug)}`} className="text-gray-200 hover:text-green-400 transition-colors duration-300 glitch-interactive" data-text={post.frontmatter.title} onClick={handlePostClick}>
     {'>'} {post.frontmatter.title}
 </Link>
                 </h2>
@@ -127,7 +230,7 @@ export default function HomePage({ posts = [] }) {
                   {post.excerpt}
                 </p>
                 <div className="flex flex-wrap gap-x-4 text-gray-500 mt-3">
-                   <Link href={`/posts/${encodeURIComponent(post.slug)}`} className="text-green-400 hover:underline glitch-interactive" data-text="[ODCZYTAJ CAŁY LOG...]">
+                   <Link href={`/posts/${encodeURIComponent(post.slug)}`} className="text-green-400 hover:underline glitch-interactive" data-text="[ODCZYTAJ CAŁY LOG...]" onClick={handlePostClick}>
                       [ODCZYTAJ CAŁY LOG...]
                    </Link>
                 </div>

@@ -6,7 +6,7 @@
 
 body {
   /* Tło z grafiką i przyciemnieniem */
-  background: linear-gradient(rgba(10, 10, 10, 0.85), rgba(10, 10, 10, 0.85)), url('/images/background-v2.jpg');
+  background: linear-gradient(rgba(10, 10, 10, 0.76), rgba(10, 10, 10, 0.76)), url('/images/background-v2.jpg');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;

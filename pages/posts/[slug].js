@@ -139,17 +139,20 @@ export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
       document.removeEventListener('click', handleUserInteraction);
       document.removeEventListener('keydown', handleUserInteraction);
       document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('touchend', handleUserInteraction);
     };
     
     initAudio();
     document.addEventListener('click', handleUserInteraction);
     document.addEventListener('keydown', handleUserInteraction);
     document.addEventListener('touchstart', handleUserInteraction);
+    document.addEventListener('touchend', handleUserInteraction);
     
     return () => {
       document.removeEventListener('click', handleUserInteraction);
       document.removeEventListener('keydown', handleUserInteraction);
       document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('touchend', handleUserInteraction);
     };
   }, []);
 
@@ -162,6 +165,14 @@ export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
     try {
       // Force resume audio context
       if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+
+      // Check if we're on mobile and handle accordingly
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (isMobile && audioContextRef.current.state !== 'running') {
+        console.log('Mobile device detected, ensuring audio context is running');
         await audioContextRef.current.resume();
       }
 
@@ -214,16 +225,19 @@ export default function PostPage({ source, frontmatter, prevPost, nextPost }) {
       filter.frequency.setValueAtTime(1000, audioContextRef.current.currentTime);
       filter.frequency.exponentialRampToValueAtTime(200, audioContextRef.current.currentTime + 0.3);
       
-      // Volume envelope
+      // Volume envelope - slightly louder for mobile
+      const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const volumeMultiplier = isMobileDevice ? 0.15 : 0.1;
+      
       gainNode.gain.setValueAtTime(0, audioContextRef.current.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.1, audioContextRef.current.currentTime + 0.05);
+      gainNode.gain.linearRampToValueAtTime(volumeMultiplier, audioContextRef.current.currentTime + 0.05);
       gainNode.gain.exponentialRampToValueAtTime(0.01, audioContextRef.current.currentTime + 0.3);
       
       // Start and stop
       oscillator.start(audioContextRef.current.currentTime);
       oscillator.stop(audioContextRef.current.currentTime + 0.3);
       
-      console.log(`Playing ${type} glitch sound`);
+      console.log(`Playing ${type} glitch sound on ${isMobile ? 'mobile' : 'desktop'}`);
     } catch (error) {
       console.log('Audio playback failed:', error);
     }
